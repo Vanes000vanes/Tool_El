@@ -1,0 +1,844 @@
+// ==UserScript==
+// @name         ⚔️ 【Tiên Hiệp】Hoàng Hoàng Bí Tịch v2.1 
+// @namespace    http://tampermonkey.net/
+// @version      2.1
+// @description  HWANG IMMORTAL EDITION - Phím M
+// @author       Hwang
+// @match        *://eldorado-asako.com/game*
+// @match        *://h5.eldorado-asako.com/game*
+//@icon          https://i.pinimg.com/736x/29/a0/31/29a0312344914386881165a62e68775e.jpg
+// @grant        none
+// ==/UserScript==
+
+
+
+(function() {
+    // ═══════════════════════════════════════════════════════
+    // 🌌 【Thế Giới Tiên Hiệp】Khởi tạo script
+    // ═══════════════════════════════════════════════════════
+
+    if (window.__HWANG_IMMORTAL_SCRIPT) {
+        console.log("⚔️ 【Hoàng Hoàng Lệnh】Script đã hiển hiện tại thế giới này!");
+        return;
+    }
+    window.__HWANG_IMMORTAL_SCRIPT = true;
+
+    // Tiên nhân độc thoại
+    const IMMORTAL_DIALOGUES = [
+        "Ta là tu tiên đại năng, chu du vạn giới...",
+        "Game cỏn con, há có thể cản trở đạo tâm của ta?",
+        "Cảnh giới đột phá! Ta đã vô địch!",
+        "Hoàng Hoàng Pháp Tắc, cấm chỉ tất cả!",
+        "Đây... đây là Hoàng Hoàng Bí Tịch trong truyền thuyết!",
+        "Sức mạnh của ta đã vượt xa trò chơi này!",
+        "Tu tiên lộ vạn dặm, ta đã đến đỉnh cao!",
+        "Hử? Đây là chư thiên trò chơi? Quá yếu ớt...",
+        "Nhân danh Hoàng Hoàng, nghiền nát thế giới này!",
+        "Thiên địa hợp nhất, vạn vật quy tâm, duy ngã độc tôn!"
+    ];
+
+    function sayImmotalDialogue() {
+        const msg = IMMORTAL_DIALOGUES[Math.floor(Math.random() * IMMORTAL_DIALOGUES.length)];
+        console.log(`🧘 【Hoàng Hoàng Mật Ngữ】${msg}`);
+    }
+
+    console.log("%c ╔════════════════════════════════════════╗", "color: #FFFFFF; font-weight: bold");
+    console.log("%c ║     ⚔️ 【Tiên Nhân Bí Tịch】Hệ Thống Tu Tiên Tối Thượng v2.1  ║", "color: #FFFFFF; font-weight: bold");
+    console.log("%c ║               HWANG IMMORTAL EDITION (Dịch)           ║", "color: #CCCCCC; font-weight: bold");
+    console.log("%c ╚════════════════════════════════════════╝", "color: #FFFFFF; font-weight: bold");
+    sayImmotalDialogue();
+
+    // ═══════════════════════════════════════════════════════
+    // 🔧 Quản lý trạng thái cốt lõi
+    // ═══════════════════════════════════════════════════════
+
+    let cloudHackInterval = null;
+    let _origCloudGarden = null;
+    let _origCloudVars = null;
+
+    const _setInterval = window.setInterval;
+    const _setTimeout = window.setTimeout;
+
+    // [SỬA LỖI] Lưu lại hàm alert/confirm gốc trước khi vô hiệu hóa
+    const _originalAlert = window.alert;
+    const _originalConfirm = window.confirm;
+    window.alert = null; // Vô hiệu hóa alert của game
+
+    const originalTimers = {
+        TIMER_INTERVAL: window.TIMER_INTERVAL,
+        EFFECT_INTERVAL: window.EFFECT_INTERVAL,
+        BOSS_TIMER_INTERVAL: window.BOSS_TIMER_INTERVAL,
+        CLOUD_GARDEN_TIMER_INTERVAL: window.CLOUD_GARDEN_TIMER_INTERVAL
+    };
+
+    const fastTimers = {
+        TIMER_INTERVAL: 10,
+        EFFECT_INTERVAL: 10,
+        BOSS_TIMER_INTERVAL: 10,
+        CLOUD_GARDEN_TIMER_INTERVAL: 10
+    };
+
+    window.__HACK_STATE = window.__HACK_STATE || {};
+    window.__HACK_STATE.enabled = false;
+    window.__HACK_STATE.timers = fastTimers;
+    window.__HACK_STATE.stats = {
+        unitsBuffed: 0,
+        totalDamage: 0,
+        sessionTime: 0
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // ⚡ Hệ thống Hook hẹn giờ
+    // ═══════════════════════════════════════════════════════
+
+    if (!window.__HWANG_TIMERS_HOOKED) {
+        window.__HWANG_TIMERS_HOOKED = true;
+
+        window.setInterval = function(fn, delay, ...args) {
+            const state = window.__HACK_STATE;
+            if (state.enabled) {
+                for (const name in state.timers) {
+                    try {
+                        if (delay === window[name] || (window.glo && delay === window.glo[name])) {
+                            delay = state.timers[name];
+                            break;
+                        }
+                    } catch(e) {}
+                }
+            }
+            return _setInterval(fn, delay, ...args);
+        };
+
+        window.setTimeout = function(fn, delay, ...args) {
+            const state = window.__HACK_STATE;
+            if (state.enabled) {
+                for (const name in state.timers) {
+                    try {
+                        if (delay === window[name] || (window.glo && delay === window.glo[name])) {
+                            delay = state.timers[name];
+                            break;
+                        }
+                    } catch(e) {}
+                }
+            }
+            return _setTimeout(fn, delay, ...args);
+        };
+    }
+
+    if (window.glo?.fun?.show_s_error_network) {
+        window.glo.fun.show_s_error_network = () => {};
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // 🎨 【Hắc Bạch UI】Hệ thống Giao diện - Phong cách Đen Trắng
+    // ═══════════════════════════════════════════════════════
+
+    function addStyles() {
+        if (document.querySelector("#hwangImmortalStyles")) return;
+
+        const style = document.createElement("style");
+        style.id = "hwangImmortalStyles";
+        style.textContent = `
+            /* ===== Bảng điều khiển chính ===== */
+            #hwangMainPanel {
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                width: 320px;
+                background: #111111;
+                border: 2px solid #555555;
+                border-radius: 10px;
+                box-shadow:
+                    0 0 20px rgba(0, 0, 0, 0.5),
+                    0 0 30px rgba(255, 255, 255, 0.05),
+                    inset 0 0 10px rgba(255, 255, 255, 0.05);
+                z-index: 100000;
+                font-family: 'Microsoft YaHei', 'SimHei', sans-serif;
+                color: #EEEEEE;
+                user-select: none;
+                overflow: hidden;
+
+                /* [MỚI] Thêm Animation */
+                opacity: 1;
+                transform: translateX(0);
+                transition: opacity 0.4s ease, transform 0.4s ease;
+            }
+
+            /* [MỚI] Trạng thái ẩn cho phím M */
+            #hwangMainPanel.hwang-hidden {
+                opacity: 0;
+                transform: translateX(-100px);
+                pointer-events: none;
+            }
+
+            @keyframes hwangPanelBreathe {
+                0%, 100% { box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 255, 255, 0.05), inset 0 0 10px rgba(255, 255, 255, 0.05); }
+                50% { box-shadow: 0 0 10px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 255, 255, 0.02), inset 0 0 5px rgba(255, 255, 255, 0.02); }
+            }
+
+            /* Thanh tiêu đề */
+            #hwangTitle {
+                background: #222222;
+                padding: 12px 15px;
+                border-bottom: 1px solid #555555;
+                font-size: 16px;
+                font-weight: bold;
+                text-align: center;
+                letter-spacing: 1px;
+                text-shadow: 0 0 5px #EEEEEE;
+                cursor: move;
+            }
+
+            #hwangTitle:hover { text-shadow: 0 0 10px #FFFFFF; }
+
+            /* Khu vực nội dung */
+            #hwangContent {
+                padding: 15px;
+                max-height: 400px;
+                overflow-y: auto;
+            }
+
+            /* ===== Kiểu nút bấm ===== */
+            .hwang-btn {
+                width: 100%;
+                padding: 12px;
+                margin: 8px 0;
+                background: #222222;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                color: #EEEEEE;
+                font-size: 14px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                text-shadow: none;
+                letter-spacing: 1px;
+            }
+
+            .hwang-btn:hover {
+                background: #333333;
+                box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+                color: #FFFFFF;
+                transform: translateY(-2px);
+            }
+
+            .hwang-btn:active {
+                transform: translateY(0);
+                box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+            }
+
+            .hwang-btn.active {
+                background: #FFFFFF;
+                color: #000000;
+                box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+                text-shadow: none;
+            }
+
+            /* Đèn báo trạng thái */
+            .hwang-status {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 10px;
+                background: rgba(255, 255, 255, 0.02);
+                border: 1px solid #444444;
+                border-radius: 6px;
+                margin: 8px 0;
+                font-size: 12px;
+            }
+
+            .hwang-status-dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: #555;
+                box-shadow: 0 0 5px #555;
+            }
+
+            .hwang-status-dot.on {
+                background: #FFFFFF;
+                box-shadow: 0 0 10px #FFFFFF;
+                animation: hwangDotPulse 1s ease-in-out infinite;
+            }
+
+            @keyframes hwangDotPulse {
+                0%, 100% { box-shadow: 0 0 10px #FFFFFF; }
+                50% { box-shadow: 0 0 20px #FFFFFF; }
+            }
+
+            /* Thông tin thống kê */
+            .hwang-stats {
+                background: rgba(0, 0, 0, 0.3);
+                border: 1px solid #444444;
+                border-radius: 6px;
+                padding: 10px;
+                margin: 8px 0;
+                font-size: 12px;
+                line-height: 1.6;
+            }
+
+            .hwang-stats-item {
+                display: flex;
+                justify-content: space-between;
+                margin: 4px 0;
+            }
+
+            .hwang-stats-label { color: #CCCCCC; }
+            .hwang-stats-value {
+                color: #FFFFFF;
+                font-weight: bold;
+                text-shadow: 0 0 5px #FFFFFF;
+            }
+
+            /* Thanh cuộn */
+            #hwangContent::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            #hwangContent::-webkit-scrollbar-track {
+                background: rgba(0, 0, 0, 0.3);
+                border-radius: 10px;
+            }
+
+            #hwangContent::-webkit-scrollbar-thumb {
+                background: #888888;
+                border-radius: 10px;
+                box-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
+            }
+
+            #hwangContent::-webkit-scrollbar-thumb:hover {
+                background: #AAAAAA;
+            }
+
+            /* Dải phân cách */
+            .hwang-divider {
+                height: 1px;
+                background: linear-gradient(90deg, transparent 0%, #555 50%, transparent 100%);
+                margin: 12px 0;
+            }
+
+            /* Thẻ tag */
+            .hwang-tag {
+                display: inline-block;
+                padding: 4px 8px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid #555;
+                border-radius: 4px;
+                font-size: 11px;
+                margin-right: 4px;
+                margin-bottom: 4px;
+                color: #AAAAAA;
+            }
+
+            /* Nút đóng */
+            #hwangClose {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                width: 24px;
+                height: 24px;
+                background: transparent;
+                border: none;
+                color: #AAAAAA;
+                font-size: 20px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+
+            #hwangClose:hover {
+                transform: rotate(90deg);
+                color: #FFFFFF;
+                text-shadow: 0 0 10px #FFFFFF;
+            }
+
+            /* Nút thu nhỏ */
+            #hwangMinimize {
+                position: absolute;
+                top: 8px;
+                right: 35px;
+                width: 24px;
+                height: 24px;
+                background: transparent;
+                border: none;
+                color: #AAAAAA;
+                font-size: 16px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+
+            #hwangMinimize:hover {
+                color: #FFFFFF;
+                text-shadow: 0 0 10px #FFFFFF;
+            }
+
+            /* Trạng thái thu nhỏ */
+            #hwangMainPanel.minimized #hwangContent {
+                display: none;
+            }
+
+            #hwangMainPanel.minimized #hwangTitle::after {
+                content: " [Thu nhỏ]";
+            }
+
+            /* Kiểu nút chính đặc biệt */
+            #hwangToggleBtn {
+                font-size: 16px;
+                padding: 15px;
+                background: #333333 !important;
+                border: 2px solid #666666 !important;
+            }
+
+            #hwangToggleBtn:hover {
+                background: #444444 !important;
+                box-shadow: 0 0 20px rgba(255, 255, 255, 0.2) !important;
+                border-color: #999999 !important;
+            }
+
+            #hwangToggleBtn.active {
+                background: #FFFFFF !important;
+                border-color: #FFFFFF !important;
+                color: #000000 !important;
+                box-shadow: 0 0 30px rgba(255, 255, 255, 0.7) !important;
+                animation: hwangPulse 0.6s ease-in-out;
+            }
+
+            @keyframes hwangPulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+            }
+
+            /* Responsive cho di động */
+            @media (max-width: 480px) {
+                #hwangMainPanel {
+                    width: 280px;
+                    bottom: 10px;
+                    left: 10px;
+                }
+                .hwang-btn { padding: 10px; font-size: 12px; }
+            }
+        `;
+        document.head.appendChild(style);
+        console.log("🎨 【Hắc Bạch UI】Hệ thống giao diện đã tải!");
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // 🔍 Hệ thống dò tìm GUI
+    // ═══════════════════════════════════════════════════════
+
+    function isRealGui() {
+        const hasCanvas = document.querySelector("canvas");
+        const hasGameVars = typeof OUR_TEAM_ARRAY !== "undefined" || typeof S_CLOUD_GARDEN !== "undefined";
+        const hasGameContainer = document.querySelector(".game-container");
+        return document.body && (hasCanvas || hasGameVars || hasGameContainer);
+    }
+
+    function waitForRealGui(callback) {
+        if (isRealGui()) {
+            console.log("✅ 【Thế Giới Game】Phát hiện giao diện game thật!");
+            callback();
+        } else {
+            setTimeout(() => waitForRealGui(callback), 100);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // 💪 Hệ thống cường hóa đơn vị (Bản SIÊU CẤP)
+    // ═══════════════════════════════════════════════════════
+
+    const originalStats = new WeakMap();
+
+    function applyBuff(unit) {
+        if (!unit || typeof unit !== "object") return;
+
+        if (!originalStats.has(unit)) {
+            try {
+                originalStats.set(unit, { ...unit });
+            } catch(e) {}
+        }
+
+        try {
+            // HP -
+                    unit.hp = 999999999;
+                    unit.max_hp = 999999999;
+                    unit.full_hp = 9999999;
+
+                    // SÁT THƯƠNG -
+                    unit.attack_power = 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999;
+                    unit.ori_attack_power = 99999999999999999999999999999999999999999999999999999999999999999999999999999999;
+
+                    // Tốc độ TẤN CÔNG -
+                    unit.attack_speed = -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999;
+                    unit.ori_attack_speed = -999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999;
+                    unit.attack_speed_tick_count = -99999999999999999999999999999999999999;
+
+                    // TẦM ĐÁNH -
+                    unit.attack_len = 99999;
+
+                    // Tốc độ BẮN -
+                    unit.fire_frame_num = 1;
+                    unit.fire_frame_cur = 1;
+                    unit.wait_frame_cur = 1;
+                    unit.ch_time = 0.1;
+
+                    // DI CHUYỂN -
+                    unit.move_speed = 999999;
+                    unit.ori_move_speed = 999999;
+
+                    // CẤP ĐỘ -
+                    unit.star =9999999999;
+                    unit.max_level = 9999999999999;
+
+                    // GIÁ RẺ
+                    unit.need_mineral = 1;
+
+                    // BẤT TỬ
+                    unit.is_strength = 9999;
+                    unit.is_invincible = 1;
+                    unit.immortal = 1;
+                    unit.god_mode = 1;
+
+            window.__HACK_STATE.stats.unitsBuffed++;
+        } catch(e) {
+            console.log("❌ Cường hóa đơn vị thất bại:", e);
+        }
+    }
+
+    function restoreUnit(unit) {
+        if (!unit || typeof unit !== "object") return;
+        if (!originalStats.has(unit)) return;
+
+        try {
+            const original = originalStats.get(unit);
+            for (const key in original) {
+                unit[key] = original[key];
+            }
+        } catch(e) {
+            console.log("❌ Khôi phục đơn vị thất bại:", e);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ☁️ Công nghệ Hắc Ám: Vân Hoa Viên
+    // ═══════════════════════════════════════════════════════
+
+    function startCloudHack() {
+        if (_origCloudGarden === null && typeof S_CLOUD_GARDEN !== "undefined") {
+            _origCloudGarden = {
+                notice_timer: S_CLOUD_GARDEN.notice_timer,
+                score_correction: S_CLOUD_GARDEN.score_correction,
+                dragon_damage_timer: S_CLOUD_GARDEN.dragon_damage_timer,
+                spawn_timer: S_CLOUD_GARDEN.spawn_timer
+            };
+        }
+
+        if (_origCloudVars === null) {
+            _origCloudVars = {
+                CLOUD_GARDEN_SPEED: (typeof CLOUD_GARDEN_SPEED !== "undefined") ? CLOUD_GARDEN_SPEED : undefined,
+                CLOUD_GARDEN_DAMAGE: (typeof CLOUD_GARDEN_DAMAGE !== "undefined") ? CLOUD_GARDEN_DAMAGE : undefined
+            };
+        }
+
+        if (cloudHackInterval) clearInterval(cloudHackInterval);
+
+        cloudHackInterval = setInterval(() => {
+            try {
+                if (typeof S_CLOUD_GARDEN !== "undefined" && S_CLOUD_GARDEN) {
+                    S_CLOUD_GARDEN.notice_timer = 1;
+                    S_CLOUD_GARDEN.score_correction = 999;
+                    S_CLOUD_GARDEN.dragon_damage_timer = 1;
+                    S_CLOUD_GARDEN.spawn_timer = 1;
+                }
+                if (typeof CLOUD_GARDEN_SPEED !== "undefined") CLOUD_GARDEN_SPEED = 50;
+                if (typeof CLOUD_GARDEN_DAMAGE !== "undefined") CLOUD_GARDEN_DAMAGE = 9999;
+            } catch(err) {}
+        }, 100);
+
+        console.log("☁️ 【Vân Hoa Viên】Công nghệ Hắc Ám đã khởi động!");
+    }
+
+    function stopCloudHack() {
+        if (cloudHackInterval) {
+            clearInterval(cloudHackInterval);
+            cloudHackInterval = null;
+        }
+
+        if (_origCloudGarden && typeof S_CLOUD_GARDEN !== "undefined") {
+            try {
+                if (_origCloudGarden.notice_timer !== undefined) S_CLOUD_GARDEN.notice_timer = _origCloudGarden.notice_timer;
+                if (_origCloudGarden.score_correction !== undefined) S_CLOUD_GARDEN.score_correction = _origCloudGarden.score_correction;
+                if (_origCloudGarden.dragon_damage_timer !== undefined) S_CLOUD_GARDEN.dragon_damage_timer = _origCloudGarden.dragon_damage_timer;
+                if (_origCloudGarden.spawn_timer !== undefined) S_CLOUD_GARDEN.spawn_timer = _origCloudGarden.spawn_timer;
+            } catch(e) {}
+        }
+
+        console.log("☁️ 【Vân Hoa Viên】Công nghệ Hắc Ám đã tắt");
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // 🎮 Tạo bảng điều khiển chính
+    // ═══════════════════════════════════════════════════════
+
+    function createMainPanel() {
+        if (document.getElementById("hwangMainPanel")) return;
+
+        const panel = document.createElement("div");
+        panel.id = "hwangMainPanel";
+
+        panel.innerHTML = `
+            <div id="hwangTitle">
+                ⚔️ 【Hoàng Hoàng Bí Tịch】v2.1
+                <button id="hwangMinimize" title="Thu nhỏ">━</button>
+                <button id="hwangClose" title="Đóng">✕</button>
+            </div>
+            <div id="hwangContent">
+                <button id="hwangToggleBtn" class="hwang-btn">
+                    ⚡ Khởi động Hệ Thống Tu Tiên
+                </button>
+
+                <div class="hwang-divider"></div>
+
+                <div class="hwang-status">
+                    <span>🔧 Trạng thái hệ thống</span>
+                    <div class="hwang-status-dot"></div>
+                </div>
+
+                <div class="hwang-stats">
+                    <div class="hwang-stats-item">
+                        <span class="hwang-stats-label">💪 Đơn vị cường hóa:</span>
+                        <span class="hwang-stats-value" id="statUnits">0</span>
+                    </div>
+                    <div class="hwang-stats-item">
+                        <span class="hwang-stats-label">⚡ Thời gian chạy:</span>
+                        <span class="hwang-stats-value" id="statTime">0s</span>
+                    </div>
+                    <div class="hwang-stats-item">
+                        <span class="hwang-stats-label">👑 Cấp độ quyền hạn:</span>
+                        <span class="hwang-stats-value">HWANG IMMORTAL</span>
+                    </div>
+                </div>
+
+                <div class="hwang-divider"></div>
+
+                <button id="hwangCloudBtn" class="hwang-btn">
+                    ☁️ Tăng tốc Vân Hoa Viên
+                </button>
+
+                <button id="hwangStatsBtn" class="hwang-btn">
+                    📊 Xem thống kê chi tiết
+                </button>
+
+                <button id="hwangResetBtn" class="hwang-btn">
+                    🔄 Đặt lại Trạng thái
+                </button>
+
+                <div class="hwang-divider"></div>
+
+                <div style="text-align: center; font-size: 11px; color: #888; padding: 10px 0;">
+                    <div>👑 Chủ nhân: <span style="color: #CCCCCC;">Hwang皇</span></div>
+                    <div><span class="hwang-tag">v2.1</span><span class="hwang-tag">Ultimate</span><span class="hwang-tag">Tiên Hiệp</span></div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        console.log("🎮 【Bảng điều khiển】đã được tạo!");
+
+        // ═════════════════════════════════════════
+        // 🎯 Hệ thống xử lý sự kiện
+        // ═════════════════════════════════════════
+
+        let running = window.__HACK_STATE.enabled;
+        let buffInterval = null;
+        let statsInterval = null;
+        let isDragging = false;
+        let dragOffsetX = 0, dragOffsetY = 0;
+
+        const titleEl = document.getElementById("hwangTitle");
+        const toggleBtn = document.getElementById("hwangToggleBtn");
+        const cloudBtn = document.getElementById("hwangCloudBtn");
+        const statsBtn = document.getElementById("hwangStatsBtn");
+        const resetBtn = document.getElementById("hwangResetBtn");
+        const closeBtn = document.getElementById("hwangClose");
+        const minimizeBtn = document.getElementById("hwangMinimize");
+        const statusDot = panel.querySelector(".hwang-status-dot");
+
+        // Nút bật/tắt chính
+        toggleBtn.addEventListener("click", () => {
+            if (!running) {
+                window.__HACK_STATE.enabled = true;
+                running = true;
+
+                toggleBtn.textContent = "✋ Dừng Tu Tiên";
+                toggleBtn.classList.add("active");
+                statusDot.classList.add("on");
+
+                buffInterval = setInterval(() => {
+                    if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+                        for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                            applyBuff(OUR_TEAM_ARRAY[i]);
+                        }
+                    }
+                }, 200);
+
+                try {
+                    startCloudHack();
+                } catch(e) {}
+
+                sayImmotalDialogue();
+                console.log("🌟 【Chế độ Tu Tiên】đã khởi động!");
+            } else {
+                window.__HACK_STATE.enabled = false;
+                running = false;
+
+                toggleBtn.textContent = "⚡ Khởi động Hệ Thống Tu Tiên";
+                toggleBtn.classList.remove("active");
+                statusDot.classList.remove("on");
+
+                if (buffInterval) {
+                    clearInterval(buffInterval);
+                    buffInterval = null;
+                }
+
+                if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+                    for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                        restoreUnit(OUR_TEAM_ARRAY[i]);
+                    }
+                }
+
+                try {
+                    stopCloudHack();
+                } catch(e) {}
+
+                console.log("🌙 【Chế độ Tu Tiên】đã tắt");
+            }
+        });
+
+        // Nút Vân Hoa Viên
+        cloudBtn.addEventListener("click", () => {
+            if (running) {
+                _originalAlert("☁️ Tăng tốc Vân Hoa Viên đã chạy cùng hệ thống chính!");
+            } else {
+                startCloudHack();
+                _originalAlert("☁️ Tăng tốc Vân Hoa Viên đã khởi động (tạm thời)!");
+                setTimeout(stopCloudHack, 10000);
+            }
+        });
+
+        // Nút thống kê
+        statsBtn.addEventListener("click", () => {
+            const stats = window.__HACK_STATE.stats;
+            const msg = `
+📊 【Thống Kê Tu Tiên】
+━━━━━━━━━━
+💪 Đơn vị cường hóa: ${stats.unitsBuffed}
+⚡ Thời gian chạy: ${Math.floor(stats.sessionTime / 1000)}s
+👑 Cấp độ quyền hạn: HWANG IMMORTAL
+━━━━━━━━━━
+🌟 Tiến độ tu tiên: ${(stats.unitsBuffed * 10)}%
+            `;
+            _originalAlert(msg);
+        });
+
+        // Nút reset
+        resetBtn.addEventListener("click", () => {
+            if (_originalConfirm("🔄 Bạn có chắc muốn đặt lại mọi trạng thái?")) {
+                window.__HACK_STATE.stats = {
+                    unitsBuffed: 0,
+                    totalDamage: 0,
+                    sessionTime: 0
+                };
+                originalStats.clear || (originalStats.constructor = new WeakMap());
+                _originalAlert("✅ Trạng thái đã được đặt lại!");
+            }
+        });
+
+        // Nút đóng
+        closeBtn.addEventListener("click", () => {
+            if (_originalConfirm("⚔️ Bạn có chắc muốn đóng【Hoàng Hoàng Bí Tịch】?")) {
+                if (running) toggleBtn.click();
+                panel.remove();
+                console.log("❌ 【Hoàng Hoàng Bí Tịch】đã đóng");
+            }
+        });
+
+        // Nút thu nhỏ
+        minimizeBtn.addEventListener("click", () => {
+            panel.classList.toggle("minimized");
+        });
+
+        // Chức năng kéo thả
+        titleEl.addEventListener("pointerdown", (e) => {
+            isDragging = true;
+            const rect = panel.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            titleEl.style.cursor = "grabbing";
+        });
+
+        document.addEventListener("pointermove", (e) => {
+            if (!isDragging) return;
+            const newX = Math.max(0, e.clientX - dragOffsetX);
+            const newY = Math.max(0, e.clientY - dragOffsetY);
+            panel.style.left = newX + "px";
+            panel.style.bottom = "auto";
+            panel.style.top = newY + "px";
+        });
+
+        document.addEventListener("pointerup", () => {
+            if (isDragging) {
+                isDragging = false;
+                titleEl.style.cursor = "move";
+            }
+        });
+
+        // Cập nhật thống kê thời gian thực
+        statsInterval = setInterval(() => {
+            if (running) {
+                window.__HACK_STATE.stats.sessionTime += 100;
+                const timeEl = document.getElementById("statTime");
+                const unitsEl = document.getElementById("statUnits");
+                if (timeEl) timeEl.textContent = Math.floor(window.__HACK_STATE.stats.sessionTime / 1000) + "s";
+                if (unitsEl) unitsEl.textContent = window.__HACK_STATE.stats.unitsBuffed;
+            }
+        }, 100);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // 🚀 Khởi động Script
+    // ═══════════════════════════════════════════════════════
+
+    waitForRealGui(() => {
+        addStyles();
+        createMainPanel();
+    });
+
+    // DOM Theo dõi
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById("hwangMainPanel") && isRealGui()) {
+            console.log("🔄 【Tải lại trang】Tạo lại menu");
+            addStyles();
+            createMainPanel();
+        }
+    });
+
+    observer.observe(document, { childList: true, subtree: true });
+
+    // [MỚI] Thêm trình lắng nghe phím M
+    document.addEventListener('keydown', function(event) {
+        // Ngăn phím M hoạt động khi đang gõ chat/input
+        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
+            return;
+        }
+
+        // Kiểm tra phím M
+        if (event.key.toLowerCase() === 'm') {
+            const panel = document.getElementById("hwangMainPanel");
+            if (panel) {
+                panel.classList.toggle('hwang-hidden');
+            }
+        }
+    });
+
+
+    console.log("%c ✨ 【Hoàng Hoàng Bí Tịch】đã tải hoàn tất! Sẵn sàng thống trị trò chơi chưa?", "color: #FFFFFF; font-weight: bold; font-size: 14px;");
+})();
