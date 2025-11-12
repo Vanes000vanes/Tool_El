@@ -1,0 +1,433 @@
+// ==UserScript==
+// @name         Vmod Fix
+// @namespace    http://tampermonkey.net/
+// @version      2.1
+// @description  Phiên bản tối ưu - Giảm lag
+// @author       Vanes
+// @match        *://eldorado-asako.com/game*
+// @match        *://h5.eldorado-asako.com/game*
+// @grant        none
+// @run-at       document-start
+// @icon         https://i.pinimg.com/736x/f8/c3/2f/f8c32fb436ff8c4e4c92a1577e022c54.jpg
+// ==/UserScript==
+
+(function() {
+    // Kiểm tra nếu script đã được khởi tạo
+    if (window.__HEHE_SCRIPT_INITIALIZED) {
+        console.log("🚀 Script CỰC MẠNH đã khởi tạo trước đó, bỏ qua!");
+        return;
+    }
+    window.__HEHE_SCRIPT_INITIALIZED = true;
+
+    console.log("🚀 script CỰC MẠNH loaded (OPTIMIZED VERSION)");
+
+    // ==== 0. Cloud hack state holders ====
+    let cloudHackInterval = null;
+    let _origCloudGarden = null;
+    let _origCloudVars = null;
+
+    // ==== 1. Backup timer gốc ====
+    const _setInterval = window.setInterval;
+    const _setTimeout = window.setTimeout;
+    window.alert = null;
+
+    const originalTimers = {
+        TIMER_INTERVAL: window.TIMER_INTERVAL,
+        EFFECT_INTERVAL: window.EFFECT_INTERVAL,
+        BOSS_TIMER_INTERVAL: window.BOSS_TIMER_INTERVAL,
+        CLOUD_GARDEN_TIMER_INTERVAL: window.CLOUD_GARDEN_TIMER_INTERVAL
+    };
+
+    // ==== 2. ULTRA FAST Timers config - Tối ưu hơn ====
+    const ultraFastTimers = {
+        TIMER_INTERVAL: 10,  // Tăng từ 0 lên 10ms để giảm lag
+        EFFECT_INTERVAL: 10,
+        BOSS_TIMER_INTERVAL: 10,
+        CLOUD_GARDEN_TIMER_INTERVAL: 10
+    };
+
+    window.__HACK_STATE = window.__HACK_STATE || {};
+    window.__HACK_STATE.enabled = false;
+    window.__HACK_STATE.timers = ultraFastTimers;
+
+    // ==== 3. Hook Timer (chỉ hook một lần) ====
+    if (!window.__HEHE_TIMERS_HOOKED) {
+        window.__HEHE_TIMERS_HOOKED = true;
+        window.setInterval = function(fn, delay, ...args) {
+            const state = window.__HACK_STATE;
+            if (state.enabled) {
+                for (const name in state.timers) {
+                    try {
+                        if (delay === window[name] || (window.glo && delay === window.glo[name])) {
+                            delay = state.timers[name];
+                            break;
+                        }
+                    } catch(e) {}
+                }
+            }
+            return _setInterval(fn, delay, ...args);
+        };
+
+        window.setTimeout = function(fn, delay, ...args) {
+            const state = window.__HACK_STATE;
+            if (state.enabled) {
+                for (const name in state.timers) {
+                    try {
+                        if (delay === window[name] || (window.glo && delay === window.glo[name])) {
+                            delay = state.timers[name];
+                            break;
+                        }
+                    } catch(e) {}
+                }
+            }
+            return _setTimeout(fn, delay, ...args);
+        };
+    }
+
+    if (window.glo?.fun?.show_s_error_network) {
+        window.glo.fun.show_s_error_network = () => {};
+    }
+
+    // ==== 4. UI style CỰC MẠNH ====
+    function addStyles() {
+        if (!document.querySelector("#heheStyles")) {
+            const style = document.createElement("style");
+            style.id = "heheStyles";
+            style.textContent = `
+                #heheBtn {
+                    position: fixed;
+                    bottom: 100px;
+                    left: 10px;
+                    z-index: 100000;
+                    font-size: 16px;
+                    padding: 8px 12px;
+                    background: linear-gradient(45deg, #ff0000, #ff8000, #ffff00, #00ff00, #0080ff, #0000ff, #8000ff);
+                    background-size: 400% 400%;
+                    animation: gradient 3s ease infinite;
+                    border-radius: 8px;
+                    cursor: move;
+                    font-family: sans-serif;
+                    user-select: none;
+                    touch-action: none;
+                    color: white;
+                    border: 3px solid gold;
+                    font-weight: bold;
+                    text-shadow: 1px 1px 2px black;
+                    box-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+                }
+                #heheBtn:hover {
+                    animation: gradient 1s ease infinite;
+                    box-shadow: 0 0 20px rgba(255, 215, 0, 1);
+                }
+                #heheBtn:active {
+                    cursor: grabbing;
+                    background: #333;
+                    animation: none;
+                }
+                @keyframes gradient {
+                    0% { background-position: 0% 50%; }
+                    50% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                }
+            `;
+            document.head.appendChild(style);
+            console.log("🎨 Styles CỰC MẠNH added to document.head");
+        }
+    }
+
+    // ==== 5. Hàm kiểm tra GUI thật ====
+    function isRealGui() {
+        const hasCanvas = document.querySelector("canvas");
+        const hasGameVars = typeof OUR_TEAM_ARRAY !== "undefined" || typeof S_CLOUD_GARDEN !== "undefined";
+        const hasGameContainer = document.querySelector(".game-container");
+        return document.body && (hasCanvas || hasGameVars || hasGameContainer);
+    }
+
+    // ==== 6. Chờ GUI thật để thêm UI ====
+    function waitForRealGui(callback) {
+        if (isRealGui()) {
+            console.log("✅ Real GUI detected, proceeding with UI setup");
+            callback();
+        } else {
+            console.log("⏳ Waiting for real GUI...");
+            setTimeout(() => waitForRealGui(callback), 100);
+        }
+    }
+
+    // ==== 7. Hàm thêm nút và sự kiện ====
+    function addButton() {
+        if (!document.getElementById("heheBtn")) {
+            const heheBtn = document.createElement("button");
+            heheBtn.id = "heheBtn";
+            heheBtn.innerText = window.__HACK_STATE.enabled ? "💥 CỰC MẠNH: ON" : "😴 BÌNH THƯỜNG: OFF";
+            heheBtn.style.backgroundColor = window.__HACK_STATE.enabled ? "linear-gradient(45deg, #ff0000, #ff8000)" : "#111";
+            document.body.appendChild(heheBtn);
+            console.log("🔘 Button CỰC MẠNH added to document.body");
+
+            // ==== 8. OPTIMIZED BUFF units - Giá trị hợp lý hơn ====
+            let buffInterval = null;
+            const originalStats = new WeakMap();
+
+            function applySuperBuff(unit) {
+                if (!unit || typeof unit !== "object") return;
+                if (!originalStats.has(unit)) {
+                    try {
+                        originalStats.set(unit, { ...unit });
+                    } catch(e) {}
+                }
+                try {
+                    // HP - Giảm xuống giá trị hợp lý hơn
+                    unit.hp = 999999999;
+                    unit.max_hp = 999999999;
+                    unit.full_hp = 9999999;
+
+                    // SÁT THƯƠNG - Giảm xuống
+                    unit.attack_power = 9999999;
+                    unit.ori_attack_power = 9999999;
+
+                    // Tốc độ TẤN CÔNG - Giá trị âm nhưng hợp lý hơn
+                    unit.attack_speed = -9999999999999999999999999999;
+                    unit.ori_attack_speed = -999999999999999999999999999;
+                    unit.attack_speed_tick_count = -9999999999999;
+
+                    // TẦM ĐÁNH - Giảm xuống
+                    unit.attack_len = 99999;
+
+                    // Tốc độ BẮN - Tăng nhẹ thay vì quá nhỏ
+                    unit.fire_frame_num = 1;
+                    unit.fire_frame_cur = 1;
+                    unit.wait_frame_cur = 1;
+                    unit.ch_time = 0.1;
+
+                    // DI CHUYỂN - Giảm xuống
+                    unit.move_speed = 999999;
+                    unit.ori_move_speed = 999999;
+
+                    // CẤP ĐỘ - Giảm999 xuống
+                    unit.star =999;
+                    unit.max_level = 999;
+
+                    // GIÁ RẺ
+                    unit.need_mineral = 1;
+
+                    // BẤT TỬ
+                    unit.is_strength = 999;
+                    unit.is_invincible = 1;
+                    unit.immortal = 1;
+                    unit.god_mode = 1;
+
+                    // BỎ BUFF TỰ ĐỘNG TẤT CẢ - Chỉ buff những gì cần thiết
+                } catch(e) {
+                    console.log("⚠️ Lỗi khi buff unit:", e);
+                }
+            }
+
+            function restoreUnit(unit) {
+                if (!unit || typeof unit !== "object") return;
+                if (!originalStats.has(unit)) return;
+                try {
+                    Object.assign(unit, originalStats.get(unit));
+                } catch(e) {}
+            }
+
+            // ==== 9. Cloud Hack - Tối ưu hóa ====
+            function startCloudHack() {
+                if (_origCloudGarden === null && typeof S_CLOUD_GARDEN !== "undefined") {
+                    _origCloudGarden = {
+                        notice_timer: S_CLOUD_GARDEN.notice_timer,
+                        score_correction: S_CLOUD_GARDEN.score_correction,
+                        dragon_damage_timer: S_CLOUD_GARDEN.dragon_damage_timer,
+                        spawn_timer: S_CLOUD_GARDEN.spawn_timer
+                    };
+                }
+
+                if (_origCloudVars === null) {
+                    _origCloudVars = {
+                        CLOUD_GARDEN_SPEED: (typeof CLOUD_GARDEN_SPEED !== "undefined") ? CLOUD_GARDEN_SPEED : undefined,
+                        CLOUD_GARDEN_DAMAGE: (typeof CLOUD_GARDEN_DAMAGE !== "undefined") ? CLOUD_GARDEN_DAMAGE : undefined
+                    };
+                }
+
+                if (cloudHackInterval) return;
+
+                cloudHackInterval = setInterval(() => {
+                    try {
+                        if (typeof S_CLOUD_GARDEN !== "undefined" && S_CLOUD_GARDEN) {
+                            S_CLOUD_GARDEN.notice_timer = 1;
+                            S_CLOUD_GARDEN.score_correction = 999999;
+                            S_CLOUD_GARDEN.dragon_damage_timer = 1;
+                            S_CLOUD_GARDEN.spawn_timer = 1;
+                        }
+
+                        // Giảm giá trị buff
+                        if (typeof CLOUD_GARDEN_SPEED !== "undefined") {
+                            CLOUD_GARDEN_SPEED = 99999;
+                        }
+
+                        if (typeof CLOUD_GARDEN_DAMAGE !== "undefined") {
+                            CLOUD_GARDEN_DAMAGE = 99999;
+                        }
+                    } catch(err) {}
+                }, 100); // Tăng interval từ 10ms lên 100ms
+                console.log("☁️ Cloud Hack CỰC MẠNH đã được bật!");
+            }
+
+            function stopCloudHack() {
+                if (cloudHackInterval) {
+                    clearInterval(cloudHackInterval);
+                    cloudHackInterval = null;
+                }
+
+                if (_origCloudGarden && typeof S_CLOUD_GARDEN !== "undefined") {
+                    try { S_CLOUD_GARDEN.notice_timer = _origCloudGarden.notice_timer; } catch(e) {}
+                    try { S_CLOUD_GARDEN.score_correction = _origCloudGarden.score_correction; } catch(e) {}
+                    try { S_CLOUD_GARDEN.dragon_damage_timer = _origCloudGarden.dragon_damage_timer; } catch(e) {}
+                    try { S_CLOUD_GARDEN.spawn_timer = _origCloudGarden.spawn_timer; } catch(e) {}
+                }
+
+                if (_origCloudVars) {
+                    if (typeof _origCloudVars.CLOUD_GARDEN_SPEED !== "undefined") {
+                        try { window.CLOUD_GARDEN_SPEED = _origCloudVars.CLOUD_GARDEN_SPEED; } catch(e) {}
+                    }
+                    if (typeof _origCloudVars.CLOUD_GARDEN_DAMAGE !== "undefined") {
+                        try { window.CLOUD_GARDEN_DAMAGE = _origCloudVars.CLOUD_GARDEN_DAMAGE; } catch(e) {}
+                    }
+                }
+
+                console.log("☁️ Cloud Hack CỰC MẠNH đã tắt.");
+            }
+
+            // ==== 10. BỎ BUFF TOÀN CỤC - Chỉ buff cần thiết ====
+            function superBuffEverything() {
+                // Buff enemy yếu hơn thôi
+                if (typeof ENEMY_TEAM_ARRAY !== "undefined" && Array.isArray(ENEMY_TEAM_ARRAY)) {
+                    for (let i = 0; i < ENEMY_TEAM_ARRAY.length; i++) {
+                        try {
+                            ENEMY_TEAM_ARRAY[i].hp = 1;
+                            ENEMY_TEAM_ARRAY[i].attack_power = 0;
+                        } catch(e) {}
+                    }
+                }
+
+                // Buff tài nguyên vừa phải
+                try {
+                    if (typeof glo !== "undefined" && glo) {
+                        if (glo.s && glo.s.mineral) glo.s.mineral = 999999;
+                        if (glo.s && glo.s.gold) glo.s.gold = 999999;
+                        if (glo.s && glo.s.diamond) glo.s.diamond = 999999;
+                    }
+                } catch(e) {}
+            }
+
+            // ==== 11. startSuperMode / stopSuperMode ====
+            function startSuperMode() {
+                window.__HACK_STATE.enabled = true;
+
+                // Tăng interval từ 50ms lên 200ms để giảm lag
+                buffInterval = setInterval(() => {
+                    if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+                        for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                            applySuperBuff(OUR_TEAM_ARRAY[i]);
+                        }
+                    }
+
+                    superBuffEverything();
+                }, 200); // Tăng từ 50ms lên 200ms
+
+                try { startCloudHack(); } catch(e) {}
+
+                console.log("💥 CỰC MẠNH: ON (OPTIMIZED VERSION - Ít lag hơn!)");
+            }
+
+            function stopSuperMode() {
+                window.__HACK_STATE.enabled = false;
+                try { clearInterval(buffInterval); } catch(e) {}
+                buffInterval = null;
+
+                if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+                    for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                        restoreUnit(OUR_TEAM_ARRAY[i]);
+                    }
+                }
+
+                try { stopCloudHack(); } catch(e) {}
+
+                console.log("😴 BÌNH THƯỜNG: OFF (restore buff + timers)");
+            }
+
+            // ==== 12. Toggle button events ====
+            let running = window.__HACK_STATE.enabled;
+            let isDragging = false;
+            let dragOffsetX = 0, dragOffsetY = 0, draggedElement = null;
+
+            heheBtn.addEventListener("click", function(e) {
+                if (!isDragging) {
+                    if (!running) {
+                        startSuperMode();
+                        heheBtn.innerText = "💥 CỰC MẠNH: ON";
+                        running = true;
+                    } else {
+                        stopSuperMode();
+                        heheBtn.innerText = "😴 BÌNH THƯỜNG: OFF";
+                        running = false;
+                    }
+                }
+                e.stopPropagation();
+            });
+
+            heheBtn.addEventListener("pointerdown", (e) => {
+                isDragging = true;
+                draggedElement = e.target;
+                const rect = draggedElement.getBoundingClientRect();
+                dragOffsetX = e.clientX - rect.left;
+                dragOffsetY = e.clientY - rect.top;
+                draggedElement.style.cursor = "grabbing";
+                e.preventDefault();
+            });
+
+            document.addEventListener("pointermove", (e) => {
+                if (!isDragging || !draggedElement) return;
+                const newX = e.clientX - dragOffsetX;
+                const newY = e.clientY - dragOffsetY;
+                const maxX = window.innerWidth - draggedElement.offsetWidth;
+                const maxY = window.innerHeight - draggedElement.offsetHeight;
+                draggedElement.style.left = Math.max(0, Math.min(newX, maxX)) + "px";
+                draggedElement.style.top = Math.max(0, Math.min(newY, maxY)) + "px";
+                draggedElement.style.bottom = "auto";
+            });
+
+            document.addEventListener("pointerup", () => {
+                if (isDragging && draggedElement) {
+                    isDragging = false;
+                    draggedElement.style.cursor = "move";
+                    draggedElement = null;
+                }
+            });
+
+            setTimeout(() => {
+                if (isDragging) {
+                    isDragging = false;
+                    if (draggedElement) draggedElement.style.cursor = "move";
+                    draggedElement = null;
+                }
+            }, 5000);
+        }
+    }
+
+    // ==== 13. Khởi tạo UI ban đầu ====
+    waitForRealGui(() => {
+        addStyles();
+        addButton();
+    });
+
+    // ==== 14. Monitor DOM changes ====
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById("heheBtn") && isRealGui()) {
+            console.log("🔄 Real GUI reload detected, re-adding CỰC MẠNH button");
+            addStyles();
+            addButton();
+        }
+    });
+
+    observer.observe(document, { childList: true, subtree: true });
+})();
