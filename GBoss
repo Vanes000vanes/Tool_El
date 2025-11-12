@@ -1,0 +1,410 @@
+
+// ==UserScript==
+// @name         ultimate boss (toggle buff + fastTimers OUR_TEAM_ARRAY)
+// @namespace    http://tampermonkey.net/
+// @version      1
+// @description  Buff OUR_TEAM_ARRAY + FastTimers hack với toggle ON/OFF, restore gốc khi OFF
+// @author       Bạn
+// @match        *://eldorado-asako.com/game*
+// @match        *://h5.eldorado-asako.com/game*
+// @grant        none
+// @run-at       document-start
+// ==/UserScript==
+
+(function() {
+    // Kiểm tra nếu script đã được khởi tạo
+    if (window.__HEHE_SCRIPT_INITIALIZED) {
+        console.log("🚀 Script hẹ hẹ đã khởi tạo trước đó, bỏ qua!");
+        return;
+    }
+    window.__HEHE_SCRIPT_INITIALIZED = true;
+
+    console.log("🚀 hẹ hẹ script loaded (OUR_TEAM_ARRAY buff + fastTimers)");
+
+    // ==== 0. Cloud hack state holders ====
+    let cloudHackInterval = null;
+    let _origCloudGarden = null;
+    let _origCloudVars = null;
+
+    // ==== 1. Backup timer gốc ====
+    const _setInterval = window.setInterval;
+    const _setTimeout = window.setTimeout;
+    window.alert = null;
+
+    const originalTimers = {
+        TIMER_INTERVAL: window.TIMER_INTERVAL,
+        EFFECT_INTERVAL: window.EFFECT_INTERVAL,
+        BOSS_TIMER_INTERVAL: window.BOSS_TIMER_INTERVAL,
+        CLOUD_GARDEN_TIMER_INTERVAL: window.CLOUD_GARDEN_TIMER_INTERVAL
+    };
+
+    // ==== 2. fastTimers config ====
+    const fastTimers = {
+        TIMER_INTERVAL: 0,
+        EFFECT_INTERVAL: 0,
+        BOSS_TIMER_INTERVAL: 0,
+        CLOUD_GARDEN_TIMER_INTERVAL: 0
+    };
+
+    window.__HACK_STATE = window.__HACK_STATE || {};
+    window.__HACK_STATE.enabled = false;
+    window.__HACK_STATE.timers = fastTimers;
+
+    // ==== 3. Hook Timer (chỉ hook một lần) ====
+    if (!window.__HEHE_TIMERS_HOOKED) {
+        window.__HEHE_TIMERS_HOOKED = true;
+        window.setInterval = function(fn, delay, ...args) {
+            const state = window.__HACK_STATE;
+            if (state.enabled) {
+                for (const name in state.timers) {
+                    try {
+                        if (delay === window[name] || (window.glo && delay === window.glo[name])) {
+                            delay = state.timers[name];
+                            break;
+                        }
+                    } catch(e) {}
+                }
+            }
+            return _setInterval(fn, delay, ...args);
+        };
+
+        window.setTimeout = function(fn, delay, ...args) {
+            const state = window.__HACK_STATE;
+            if (state.enabled) {
+                for (const name in state.timers) {
+                    try {
+                        if (delay === window[name] || (window.glo && delay === window.glo[name])) {
+                            delay = state.timers[name];
+                            break;
+                        }
+                    } catch(e) {}
+                }
+            }
+            return _setTimeout(fn, delay, ...args);
+        };
+    }
+
+    if (window.glo?.fun?.show_s_error_network) {
+        window.glo.fun.show_s_error_network = () => {};
+    }
+
+    // ==== 4. UI style ====
+    function addStyles() {
+        if (!document.querySelector("#heheStyles")) {
+            const style = document.createElement("style");
+            style.id = "heheStyles";
+            style.textContent = `
+                #heheBtn {
+                    position: fixed;
+                    bottom: 100px;
+                    left: 10px;
+                    z-index: 100000; /* Tăng z-index để vượt qua các layer game */
+                    font-size: 16px;
+                    padding: 8px 12px;
+                    background: #111;
+                    border-radius: 8px;
+                    cursor: move;
+                    font-family: sans-serif;
+                    user-select: none;
+                    touch-action: none;
+                    color: lime;
+                    border: 2px solid lime;
+                }
+                #heheBtn:hover { background: #222; }
+                #heheBtn:active { cursor: grabbing; background: #333; }
+            `;
+            document.head.appendChild(style);
+            console.log("🎨 Styles added to document.head");
+        }
+    }
+
+    // ==== 5. Hàm kiểm tra GUI thật ====
+    function isRealGui() {
+        const hasCanvas = document.querySelector("canvas");
+        const hasGameVars = typeof OUR_TEAM_ARRAY !== "undefined" || typeof S_CLOUD_GARDEN !== "undefined";
+        const hasGameContainer = document.querySelector(".game-container"); // Thay bằng selector thực của game
+        console.log("🔍 isRealGui check:", { hasCanvas, hasGameVars, hasGameContainer });
+        return document.body && (hasCanvas || hasGameVars || hasGameContainer);
+    }
+
+    // ==== 6. Chờ GUI thật để thêm UI ====
+    function waitForRealGui(callback) {
+        if (isRealGui()) {
+            console.log("✅ Real GUI detected, proceeding with UI setup");
+            callback();
+        } else {
+            console.log("⏳ Waiting for real GUI...");
+            setTimeout(() => waitForRealGui(callback), 100);
+        }
+    }
+
+    // ==== 7. Hàm thêm nút và sự kiện ====
+    function addButton() {
+        if (!document.getElementById("heheBtn")) {
+            const heheBtn = document.createElement("button");
+            heheBtn.id = "heheBtn";
+            heheBtn.innerText = window.__HACK_STATE.enabled ? "😈 hẹ hẹ: ON" : "😴 dễ: OFF";
+            heheBtn.style.backgroundColor = window.__HACK_STATE.enabled ? "#900" : "#111";
+            heheBtn.style.border = window.__HACK_STATE.enabled ? "2px solid red" : "2px solid lime";
+            heheBtn.style.color = window.__HACK_STATE.enabled ? "white" : "lime";
+            document.body.appendChild(heheBtn);
+            console.log("🔘 Button added to document.body");
+
+            // ==== 8. Buff units ====
+            let buffInterval = null;
+            const originalStats = new WeakMap();
+
+            function applyBuff(unit) {
+                if (!unit || typeof unit !== "object") return;
+                if (!originalStats.has(unit)) {
+                    try {
+                        originalStats.set(unit, { ...unit });
+                    } catch(e) {}
+                }
+                try {
+                    unit.hp = 999999999999999999;
+                    unit.max_hp = 99999999;
+                    unit.full_hp = 999999999999999999999;
+                    unit.attack_power = 7999999;
+                    unit.ori_attack_power = 7999999;
+                    unit.attack_speed = -Infinity;
+                    unit.ori_attack_speed = -Infinity;
+                    unit.attack_len = 999999;
+                    unit.fire_frame_num = 1;
+                    unit.move_speed = 50;
+                    unit.ori_move_speed = 50;
+                    unit.star = 8;
+                    unit.max_level = 99999999;
+                    unit.need_mineral = 1;
+                    unit.fire_frame_cur = 7;
+                    unit.wait_frame_cur = 12;
+                    unit.ch_time = 0;
+                    unit.attack_speed_tick_count = Infinity;
+                    unit.is_strength = 1;
+                } catch(e) {}
+            }
+
+            function restoreUnit(unit) {
+                if (!unit || typeof unit !== "object") return;
+                if (!originalStats.has(unit)) return;
+                try {
+                    Object.assign(unit, originalStats.get(unit));
+                } catch(e) {}
+            }
+
+            // ==== 9. Cloud Hack: start / stop ====
+            function startCloudHack() {
+                if (_origCloudGarden === null && typeof S_CLOUD_GARDEN !== "undefined") {
+                    _origCloudGarden = {
+                        notice_timer: S_CLOUD_GARDEN.notice_timer,
+                        score_correction: S_CLOUD_GARDEN.score_correction,
+                        dragon_damage_timer: S_CLOUD_GARDEN.dragon_damage_timer,
+                        spawn_timer: S_CLOUD_GARDEN.spawn_timer
+                    };
+                } else if (_origCloudGarden === null) {
+                    _origCloudGarden = null;
+                }
+
+                if (_origCloudVars === null) {
+                    _origCloudVars = {
+                        CLOUD_GARDEN_SPEED: (typeof CLOUD_GARDEN_SPEED !== "undefined") ? CLOUD_GARDEN_SPEED : undefined,
+                        CLOUD_GARDEN_DAMAGE: (typeof CLOUD_GARDEN_DAMAGE !== "undefined") ? CLOUD_GARDEN_DAMAGE : undefined
+                    };
+                }
+
+                if (cloudHackInterval) return;
+
+                cloudHackInterval = setInterval(() => {
+                    try {
+                        if (typeof S_CLOUD_GARDEN !== "undefined" && S_CLOUD_GARDEN) {
+                            if (S_CLOUD_GARDEN.notice_timer && typeof S_CLOUD_GARDEN.notice_timer === "object") {
+                                clearInterval(S_CLOUD_GARDEN.notice_timer);
+                                S_CLOUD_GARDEN.notice_timer = 1;
+                            } else {
+                                S_CLOUD_GARDEN.notice_timer = 1;
+                            }
+
+                            if (typeof S_CLOUD_GARDEN.score_correction !== "undefined") {
+                                S_CLOUD_GARDEN.score_correction = 999;
+                            } else {
+                                S_CLOUD_GARDEN.score_correction = 999;
+                            }
+
+                            if (S_CLOUD_GARDEN.dragon_damage_timer && typeof S_CLOUD_GARDEN.dragon_damage_timer === "object") {
+                                clearInterval(S_CLOUD_GARDEN.dragon_damage_timer);
+                                S_CLOUD_GARDEN.dragon_damage_timer = 0;
+                            } else {
+                                S_CLOUD_GARDEN.dragon_damage_timer = 0;
+                            }
+
+                            if (S_CLOUD_GARDEN.spawn_timer && typeof S_CLOUD_GARDEN.spawn_timer === "object") {
+                                clearInterval(S_CLOUD_GARDEN.spawn_timer);
+                                S_CLOUD_GARDEN.spawn_timer = 0;
+                            } else {
+                                S_CLOUD_GARDEN.spawn_timer = 0;
+                            }
+                        }
+
+                        if (typeof CLOUD_GARDEN_SPEED !== "undefined") {
+                            CLOUD_GARDEN_SPEED = 10;
+                        } else {
+                            try { window.CLOUD_GARDEN_SPEED = 10; } catch(e) {}
+                        }
+
+                        if (typeof CLOUD_GARDEN_DAMAGE !== "undefined") {
+                            CLOUD_GARDEN_DAMAGE = 999;
+                        } else {
+                            try { window.CLOUD_GARDEN_DAMAGE = 999; } catch(e) {}
+                        }
+                    } catch(err) {}
+                }, 50);
+                console.log("☁️ Cloud Hack đã được bật!");
+            }
+
+            function stopCloudHack() {
+                if (cloudHackInterval) {
+                    clearInterval(cloudHackInterval);
+                    cloudHackInterval = null;
+                }
+
+                if (_origCloudGarden && typeof S_CLOUD_GARDEN !== "undefined") {
+                    try { S_CLOUD_GARDEN.notice_timer = _origCloudGarden.notice_timer; } catch(e) {}
+                    try { S_CLOUD_GARDEN.score_correction = _origCloudGarden.score_correction; } catch(e) {}
+                    try { S_CLOUD_GARDEN.dragon_damage_timer = _origCloudGarden.dragon_damage_timer; } catch(e) {}
+                    try { S_CLOUD_GARDEN.spawn_timer = _origCloudGarden.spawn_timer; } catch(e) {}
+                }
+
+                if (_origCloudVars) {
+                    if (typeof _origCloudVars.CLOUD_GARDEN_SPEED !== "undefined") {
+                        try { window.CLOUD_GARDEN_SPEED = _origCloudVars.CLOUD_GARDEN_SPEED; } catch(e) {}
+                    }
+                    if (typeof _origCloudVars.CLOUD_GARDEN_DAMAGE !== "undefined") {
+                        try { window.CLOUD_GARDEN_DAMAGE = _origCloudVars.CLOUD_GARDEN_DAMAGE; } catch(e) {}
+                    }
+                }
+
+                console.log("☁️ Cloud Hack đã tắt (cố gắng phục hồi giá trị gốc nếu có).");
+            }
+
+            // ==== 10. startMode / stopMode ====
+            function startMode() {
+                window.__HACK_STATE.enabled = true;
+                buffInterval = setInterval(() => {
+                    if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+                        for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                            applyBuff(OUR_TEAM_ARRAY[i]);
+                        }
+                    }
+                }, 300);
+
+                try { startCloudHack(); } catch(e) {}
+
+                console.log("😈 hẹ hẹ: ON (buff + fastTimers)");
+            }
+
+            function stopMode() {
+                window.__HACK_STATE.enabled = false;
+                try { clearInterval(buffInterval); } catch(e) {}
+                buffInterval = null;
+
+                if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+                    for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                        restoreUnit(OUR_TEAM_ARRAY[i]);
+                    }
+                }
+
+                try { stopCloudHack(); } catch(e) {}
+
+                console.log("😴 dễ: OFF (restore buff + timers)");
+            }
+
+            // ==== 11. Toggle button events ====
+            let running = window.__HACK_STATE.enabled;
+            let isDragging = false;
+            let dragOffsetX = 0, dragOffsetY = 0, draggedElement = null;
+
+            heheBtn.addEventListener("click", (e) => {
+                console.log("🖱️ Click detected on heheBtn, isDragging:", isDragging);
+                if (!isDragging) {
+                    if (!running) {
+                        startMode();
+                        heheBtn.innerText = "😈 hẹ hẹ: ON";
+                        heheBtn.style.backgroundColor = "#900";
+                        heheBtn.style.border = "2px solid red";
+                        heheBtn.style.color = "white";
+                        running = true;
+                    } else {
+                        stopMode();
+                        heheBtn.innerText = "😴 dễ: OFF";
+                        heheBtn.style.backgroundColor = "#111";
+                        heheBtn.style.border = "2px solid lime";
+                        heheBtn.style.color = "lime";
+                        running = false;
+                    }
+                }
+                e.stopPropagation(); // Ngăn game chặn sự kiện click
+            });
+
+            // Sử dụng pointer events cho hỗ trợ touch/mouse tốt hơn
+            heheBtn.addEventListener("pointerdown", (e) => {
+                console.log("🖱️ Pointerdown on heheBtn");
+                isDragging = true;
+                draggedElement = e.target;
+                const rect = draggedElement.getBoundingClientRect();
+                dragOffsetX = e.clientX - rect.left;
+                dragOffsetY = e.clientY - rect.top;
+                draggedElement.style.cursor = "grabbing";
+                e.preventDefault();
+            });
+
+            document.addEventListener("pointermove", (e) => {
+                if (!isDragging || !draggedElement) return;
+                const newX = e.clientX - dragOffsetX;
+                const newY = e.clientY - dragOffsetY;
+                const maxX = window.innerWidth - draggedElement.offsetWidth;
+                const maxY = window.innerHeight - draggedElement.offsetHeight;
+                draggedElement.style.left = Math.max(0, Math.min(newX, maxX)) + "px";
+                draggedElement.style.top = Math.max(0, Math.min(newY, maxY)) + "px";
+                draggedElement.style.bottom = "auto";
+            });
+
+            document.addEventListener("pointerup", () => {
+                console.log("🖱️ Pointerup detected");
+                if (isDragging && draggedElement) {
+                    isDragging = false;
+                    draggedElement.style.cursor = "move";
+                    draggedElement = null;
+                }
+            });
+
+            // Fallback để reset isDragging nếu mất sự kiện pointerup
+            setTimeout(() => {
+                if (isDragging) {
+                    console.log("⚠️ isDragging stuck, resetting");
+                    isDragging = false;
+                    if (draggedElement) draggedElement.style.cursor = "move";
+                    draggedElement = null;
+                }
+            }, 5000);
+        } else {
+            console.log("🔘 Button already exists, skipping creation");
+        }
+    }
+
+    // ==== 12. Khởi tạo UI ban đầu ====
+    waitForRealGui(() => {
+        addStyles();
+        addButton();
+    });
+
+    // ==== 13. Monitor DOM changes để xử lý reload GUI ====
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById("heheBtn") && isRealGui()) {
+            console.log("🔄 Real GUI reload detected, re-adding hẹ hẹ button");
+            addStyles();
+            addButton();
+        }
+    });
+
+    observer.observe(document, { childList: true, subtree: true });
+})();
