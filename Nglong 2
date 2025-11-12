@@ -1,0 +1,637 @@
+
+
+window.alert = null;
+
+
+    (function() {
+        // ==== 1. Chặn window.location.reload ====
+        const originalReload = window.location.reload;
+        window.location.reload = function() {
+            return false;
+        };
+
+        // ==== 2. Chặn window.location.href redirect ====
+        const originalLocation = window.location;
+        let isBlockingRedirect = true;
+
+        // Hook location.href setter
+        try {
+            const locationDescriptor = Object.getOwnPropertyDescriptor(Location.prototype, 'href') ||
+                                    Object.getOwnPropertyDescriptor(window.location, 'href');
+            if (locationDescriptor && locationDescriptor.set) {
+                const originalSetter = locationDescriptor.set;
+                locationDescriptor.set = function(url) {
+                    if (isBlockingRedirect && (url === "/" || url.includes("reload") || url.includes("restart"))) {
+                        return;
+                    }
+                    originalSetter.call(this, url);
+                };
+            }
+        } catch(e) {}
+
+        // ==== 2.1. Alternative method - Override location methods ====
+        const originalAssign = window.location.assign;
+        const originalReplace = window.location.replace;
+
+        window.location.assign = function(url) {
+            if (isBlockingRedirect && (url === "/" || url.includes("reload") || url.includes("restart"))) {
+                return;
+            }
+            originalAssign.call(this, url);
+        };
+
+        window.location.replace = function(url) {
+            if (isBlockingRedirect && (url === "/" || url.includes("reload") || url.includes("restart"))) {
+                return;
+            }
+            originalReplace.call(this, url);
+        };
+
+        // ==== 3. Hook socket error handler ====
+        if (window.io && window.io.sockets) {
+            const originalOn = window.io.sockets.on;
+            window.io.sockets.on = function(event, callback) {
+                if (event === "error") {
+                    return originalOn.call(this, event, function(data) {
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed.isRestartServer || parsed.isLogOut) {
+                                return; // Không thực thi callback gốc
+                            }
+                        } catch(e) {
+                            return;
+                        }
+                        // Chỉ thực thi callback nếu không phải reload
+                        callback(data);
+                    });
+                }
+                return originalOn.call(this, event, callback);
+            };
+        }
+
+        // ==== 4. Chặn setTimeout/setInterval reload (OPTIMIZED) ====
+        const originalSetTimeout = window.setTimeout;
+        window.setTimeout = function(fn, delay, ...args) {
+            // Chỉ check nếu delay < 5000ms (reload thường có delay ngắn)
+            if (typeof fn === 'function' && delay < 5000) {
+                try {
+                    const fnString = fn.toString();
+                    // Chỉ check reload() và location.reload() - cụ thể hơn
+                    if (fnString.includes("location.reload") ||
+                        (fnString.includes("reload()") && fnString.includes("location"))) {
+                        return 0; // Trả về fake timer ID
+                    }
+                } catch(e) {}
+            }
+            return originalSetTimeout(fn, delay, ...args);
+        };
+
+        const originalSetInterval = window.setInterval;
+        window.setInterval = function(fn, delay, ...args) {
+            // setInterval ít được dùng cho reload, chỉ check nếu delay nhỏ
+            if (typeof fn === 'function' && delay < 3000) {
+                try {
+                    const fnString = fn.toString();
+                    if (fnString.includes("location.reload") ||
+                        (fnString.includes("reload()") && fnString.includes("location"))) {
+                        return 0;
+                    }
+                } catch(e) {}
+            }
+            return originalSetInterval(fn, delay, ...args);
+        };
+
+        // ==== 5. UI Button ====
+        const style = document.createElement("style");
+        style.textContent = `
+            #blockReloadBtn {
+                position: fixed;
+                bottom: 160px;
+                left: 10px;
+                z-index: 99999;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 8px 16px;
+                background: linear-gradient(135deg, #2d1b69 0%, #11998e 100%);
+                border-radius: 8px;
+                cursor: pointer;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                user-select: none;
+                color: #ffffff;
+                border: 2px solid #11998e;
+                box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+                transition: all 0.3s ease;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            #blockReloadBtn:hover {
+                background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(17, 153, 142, 0.4);
+            }
+        `;
+        document.head.appendChild(style);
+
+        const blockBtn = document.createElement("button");
+        blockBtn.id = "blockReloadBtn";
+        blockBtn.innerText = "🛡️ Block Reload: ON";
+        document.body.appendChild(blockBtn);
+
+        // ==== 6. Chặn tất cả phương thức reload khác ====
+        const originalOpen = window.open;
+        window.open = function(url, name, specs) {
+            if (url && (url.includes("reload") || url.includes("restart"))) {
+                return null;
+            }
+            return originalOpen.call(this, url, name, specs);
+        };
+
+        // ==== 7. Chặn history API ====
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+
+        history.pushState = function(state, title, url) {
+            if (url && (url.includes("reload") || url.includes("restart"))) {
+                return;
+            }
+            originalPushState.call(this, state, title, url);
+        };
+
+        history.replaceState = function(state, title, url) {
+            if (url && (url.includes("reload") || url.includes("restart"))) {
+                return;
+            }
+            originalReplaceState.call(this, state, title, url);
+        };
+    })();
+(function() {
+    console.log(" Ng Longg script loaded (OUR_TEAM_ARRAY buff + fastTimers)");
+
+    // ==== 1. Backup timer gốc ====
+    const _setInterval = window.setInterval;
+    const _setTimeout = window.setTimeout;
+
+    const originalTimers = {
+        TIMER_INTERVAL: window.TIMER_INTERVAL,
+        EFFECT_INTERVAL: window.EFFECT_INTERVAL,
+        BOSS_TIMER_INTERVAL: window.BOSS_TIMER_INTERVAL,
+        CLOUD_GARDEN_TIMER_INTERVAL: window.CLOUD_GARDEN_TIMER_INTERVAL
+    };
+
+    // ==== 2. fastTimers config ====
+    const fastTimers = {
+        TIMER_INTERVAL: 0,
+        EFFECT_INTERVAL: 1,
+        BOSS_TIMER_INTERVAL: 10,
+        CLOUD_GARDEN_TIMER_INTERVAL: -1353245340
+    };
+
+    window.__HACK_STATE = window.__HACK_STATE || {};
+    window.__HACK_STATE.enabled = false;   // default OFF
+    window.__HACK_STATE.timers = fastTimers;
+
+    // ==== 3. Hook Timer ====
+    window.setInterval = function(fn, delay, ...args) {
+        const state = window.__HACK_STATE;
+        if (state.enabled) {
+            for (const name in state.timers) {
+                if (delay === window[name] || delay === window?.glo?.[name]) {
+                    delay = state.timers[name];
+                    break;
+                }
+            }
+        }
+        return _setInterval(fn, delay, ...args);
+    };
+
+    window.setTimeout = function(fn, delay, ...args) {
+        const state = window.__HACK_STATE;
+        if (state.enabled) {
+            for (const name in state.timers) {
+                if (delay === window[name] || delay === window?.glo?.[name]) {
+                    delay = state.timers[name];
+                    break;
+                }
+            }
+        }
+        return _setTimeout(fn, delay, ...args);
+    };
+
+    // disable báo lỗi mạng
+    if (window.glo?.fun?.show_s_error_network) {
+        window.glo.fun.show_s_error_network = () => {};
+    }
+
+    // ==== 4. UI style ====
+    const style = document.createElement("style");
+    style.textContent = `
+        #heheBtn {
+            position: fixed;
+            bottom: 100px;
+            left: 10px;
+            z-index: 99999;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border-radius: 12px;
+            cursor: move;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            touch-action: none;
+            color: #00ff88;
+            border: 2px solid #00ff88;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3),
+                        0 2px 8px rgba(0, 0, 0, 0.4),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 180px;
+            text-align: center;
+        }
+        #heheBtn:hover {
+            background: linear-gradient(135deg, #2d2d2d 0%, #404040 100%);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4),
+                      0 4px 12px rgba(0, 0, 0, 0.5),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            border-color: #00ffaa;
+        }
+        #heheBtn:active {
+            cursor: grabbing;
+            background: linear-gradient(135deg, #404040 0%, #555555 100%);
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 255, 136, 0.3),
+                        0 1px 4px rgba(0, 0, 0, 0.4),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+        #heheBtn.running {
+            background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
+            border-color: #ff4444;
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(255, 68, 68, 0.4),
+                        0 2px 8px rgba(0, 0, 0, 0.4),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+        #heheBtn.running:hover {
+            background: linear-gradient(135deg, #a00000 0%, #ff1744 100%);
+            box-shadow: 0 6px 20px rgba(255, 68, 68, 0.5),
+                        0 4px 12px rgba(0, 0, 0, 0.5),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+        #heheBtn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 10px;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        #heheBtn:hover::before {
+            opacity: 1;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const heheBtn = document.createElement("button");
+    heheBtn.id = "heheBtn";
+    heheBtn.innerText = "By Ng Longg: OFF";
+    document.body.appendChild(heheBtn);
+
+    // ==== 5. Buff units ====
+    let buffInterval = null;
+    const originalStats = new WeakMap();
+
+    function applyBuff(unit) {
+        if (!unit || typeof unit !== "object") return;
+        if (!originalStats.has(unit)) {
+            originalStats.set(unit, { ...unit });
+        }
+        try {
+            unit.hp = 999999999999999999;
+            unit.max_hp = 99999999;
+            unit.full_hp = 999999999999999999999;
+            unit.attack_power = 79999999;
+            unit.ori_attack_power = 799999999;
+            unit.attack_speed = -Infinity;
+            unit.ori_attack_speed = -Infinity;
+            unit.attack_len = 999999;
+            unit.fire_frame_num = 1;
+            unit.move_speed = 50;
+            unit.ori_move_speed = 50;
+            unit.star = 8;
+            unit.max_level = 99999999;
+            unit.need_mineral = 1;
+            unit.fire_frame_cur = 7;
+            unit.wait_frame_cur = 12;
+            unit.ch_time = 0;
+            unit.attack_speed_tick_count = Infinity;
+            unit.is_strength = 1;
+        } catch(e) {}
+    }
+
+    function restoreUnit(unit) {
+        if (!unit || typeof unit !== "object") return;
+        if (!originalStats.has(unit)) return;
+        try {
+            Object.assign(unit, originalStats.get(unit));
+        } catch(e) {}
+    }
+
+    function startMode() {
+        window.__HACK_STATE.enabled = true;
+        buffInterval = setInterval(() => {
+            if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+                for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                    applyBuff(OUR_TEAM_ARRAY[i]);
+                }
+            }
+        }, 300);
+        console.log("Mod: ON (buff + fastTimers)");
+    }
+
+    function stopMode() {
+        window.__HACK_STATE.enabled = false;
+        clearInterval(buffInterval);
+        if (typeof OUR_TEAM_ARRAY !== "undefined" && Array.isArray(OUR_TEAM_ARRAY)) {
+            for (let i = 0; i < OUR_TEAM_ARRAY.length; i++) {
+                restoreUnit(OUR_TEAM_ARRAY[i]);
+            }
+        }
+        console.log("By Ng Longg: OFF (restore buff + timers)");
+    }
+
+    // ==== 6. Toggle button ====
+    let running = false;
+    let isDragging = false;
+    let dragOffsetX = 0, dragOffsetY = 0, draggedElement = null;
+
+    heheBtn.addEventListener("click", () => {
+        if (!isDragging) {
+            if (!running) {
+                startMode();
+                heheBtn.innerText = "By Ng Longg: ON";
+                heheBtn.classList.add("running");
+                running = true;
+            } else {
+                stopMode();
+                heheBtn.innerText = "By Ng Longg: OFF";
+                heheBtn.classList.remove("running");
+                running = false;
+            }
+        }
+    });
+
+    // ==== 7. Drag button ====
+    heheBtn.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        draggedElement = e.target;
+        const rect = draggedElement.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        draggedElement.style.cursor = "grabbing";
+        e.preventDefault();
+    });
+    document.addEventListener("mousemove", (e) => {
+        if (!isDragging || !draggedElement) return;
+        const newX = e.clientX - dragOffsetX;
+        const newY = e.clientY - dragOffsetY;
+        const maxX = window.innerWidth - draggedElement.offsetWidth;
+        const maxY = window.innerHeight - draggedElement.offsetHeight;
+        draggedElement.style.left = Math.max(0, Math.min(newX, maxX)) + "px";
+        draggedElement.style.top = Math.max(0, Math.min(newY, maxY)) + "px";
+        draggedElement.style.bottom = "auto";
+    });
+    document.addEventListener("mouseup", () => {
+        if (isDragging && draggedElement) {
+            isDragging = false;
+            draggedElement.style.cursor = "move";
+            draggedElement = null;
+        }
+    });
+
+})();
+;(function () {
+  if (typeof window === "undefined") return;
+  const g = window;
+
+  // Defaults
+  g.__BOSS_FIXED_SPEED = g.__BOSS_FIXED_SPEED ?? 400;
+  g.__BOSS_SPEED_LOCK_ENABLED = g.__BOSS_SPEED_LOCK_ENABLED ?? false;
+
+  // Keep originals once
+  if (!g.__orig_boss_attack_count_attackspeed && g.S_BOSS && typeof g.S_BOSS.boss_attack_count_attackspeed === 'function') {
+    g.__orig_boss_attack_count_attackspeed = g.S_BOSS.boss_attack_count_attackspeed;
+  }
+  if (!g.__orig_addYourUnit && g.S_BOSS && typeof g.S_BOSS.addYourUnit === 'function') {
+    g.__orig_addYourUnit = g.S_BOSS.addYourUnit;
+  }
+
+  function applyToDesign(speed) {
+    if (!g.BOSS_DESIGN) return;
+    for (let i = 1; i <= 3; i++) if (g.BOSS_DESIGN[i]) g.BOSS_DESIGN[i].attack_speed = speed;
+  }
+
+  function applyToAlive(speed) {
+    if (!g.YOUR_TEAM_ARRAY || !g.MAX_BOSS_NUM_ON_SCREEN) return;
+    for (let i = 1; i <= g.MAX_BOSS_NUM_ON_SCREEN; i++) {
+      const b = g.YOUR_TEAM_ARRAY[i];
+      if (b && b.alive === 1) {
+        b.attack_speed = speed;
+        b.attack_speed_tick_count = 1;
+      }
+    }
+  }
+
+  function lockBossSpeed(speed) {
+    const s = Number(speed) || g.__BOSS_FIXED_SPEED || 400;
+    g.__BOSS_FIXED_SPEED = s;
+
+    // Override per-attack speed reducer
+    if (g.S_BOSS) {
+      if (!g.__orig_boss_attack_count_attackspeed && typeof g.S_BOSS.boss_attack_count_attackspeed === 'function') {
+        g.__orig_boss_attack_count_attackspeed = g.S_BOSS.boss_attack_count_attackspeed;
+      }
+      g.S_BOSS.boss_attack_count_attackspeed = function (idx) {
+        if (g.YOUR_TEAM_ARRAY && g.YOUR_TEAM_ARRAY[idx]) {
+          g.YOUR_TEAM_ARRAY[idx].attack_speed = s;
+        }
+      };
+
+      // Hook spawn to enforce on new bosses
+      if (!g.__orig_addYourUnit && typeof g.S_BOSS.addYourUnit === 'function') {
+        g.__orig_addYourUnit = g.S_BOSS.addYourUnit;
+      }
+      if (g.__orig_addYourUnit) {
+        g.S_BOSS.addYourUnit = function (unitNum) {
+          const ret = g.__orig_addYourUnit.call(this, unitNum);
+          applyToAlive(s);
+          return ret;
+        };
+      }
+    }
+
+    // Apply immediately to current and design
+    applyToDesign(s);
+    applyToAlive(s);
+    g.__BOSS_SPEED_LOCK_ENABLED = true;
+    console.log(`[BossSpeed] Locked boss attack_speed to ${s}.`);
+    return s;
+  }
+
+  function unlockBossSpeed() {
+    if (g.__orig_boss_attack_count_attackspeed) {
+      g.S_BOSS && (g.S_BOSS.boss_attack_count_attackspeed = g.__orig_boss_attack_count_attackspeed);
+    }
+    if (g.__orig_addYourUnit) {
+      g.S_BOSS && (g.S_BOSS.addYourUnit = g.__orig_addYourUnit);
+    }
+    g.__BOSS_SPEED_LOCK_ENABLED = false;
+    console.log('[BossSpeed] Unlocked (restored original handlers).');
+    return true;
+  }
+
+  function ensureWhenReady(fn) {
+    if (fn(), g.S_BOSS && g.YOUR_TEAM_ARRAY) return;
+    if (g.__BOSS_SPEED_DEFER_TIMER) return;
+    g.__BOSS_SPEED_DEFER_TIMER = setInterval(function () {
+      if (g.S_BOSS && g.YOUR_TEAM_ARRAY) {
+        clearInterval(g.__BOSS_SPEED_DEFER_TIMER);
+        g.__BOSS_SPEED_DEFER_TIMER = null;
+        fn();
+      }
+    }, 400);
+  }
+
+  // Public API for console
+  g.BossSpeedTool = {
+    set(speed = 400) { return ensureWhenReady(() => lockBossSpeed(speed)); },
+    unlock: unlockBossSpeed,
+    applyToAlive: (s = g.__BOSS_FIXED_SPEED || 400) => ensureWhenReady(() => applyToAlive(s)),
+    applyToDesign: (s = g.__BOSS_FIXED_SPEED || 400) => applyToDesign(s),
+    get enabled() { return !!g.__BOSS_SPEED_LOCK_ENABLED; },
+    get speed() { return g.__BOSS_FIXED_SPEED; },
+  };
+
+  console.log('BossSpeedTool ready. Use: BossSpeedTool.set(4400) to lock, BossSpeedTool.unlock() to restore.');
+})();
+
+(function() {
+  'use strict';
+
+  // --- 0) Tùy chọn chế độ trung hòa: 'zero' hoặc 'nan'
+  // 'zero'  -> (new Date() - startTime) ~ 0
+  // 'nan'   -> (new Date() - startTime) = NaN
+  const NEUTRAL_MODE = 'zero'; // đổi thành 'nan' nếu muốn
+
+  // --- 1) Chặn reload/stop/alert làm phiền khi devtools mở
+  try {
+    Object.defineProperty(window, 'stop', {
+      configurable: false, enumerable: false, writable: false,
+      value: function(){ console.log('[Bypass] window.stop() blocked'); }
+    });
+  } catch {}
+  try {
+    Object.defineProperty(window.location, 'reload', {
+      configurable: false, enumerable: false, writable: false,
+      value: function(){ console.log('[Bypass] location.reload() blocked'); }
+    });
+  } catch {}
+  try {
+    window.alert = function(){ console.log('[Bypass] alert blocked'); };
+  } catch {}
+
+  // --- 2) Trung hòa kiểm tra thời gian (mấu chốt "startTime = undefined" theo hiệu ứng)
+  // Ý tưởng: ép mọi đối tượng Date khi tham gia phép trừ đều trả về cùng một giá trị
+  // (hoặc NaN) -> điều kiện > timeLimit luôn false.
+  (function neutralizeDateArithmetic(){
+    const realNow = Date.now.bind(Date);
+    const realValueOf = Date.prototype.valueOf;
+
+    if (NEUTRAL_MODE === 'zero') {
+      // Luôn cho valueOf() = Date.now() tại thời điểm tính toán,
+      // nên (new Date) - (startTime) ~ 0
+      Object.defineProperty(Date.prototype, 'valueOf', {
+        configurable: true, writable: true,
+        value: function(){ return realNow(); }
+      });
+
+      // Phòng trường hợp dùng getTime()
+      Object.defineProperty(Date.prototype, 'getTime', {
+        configurable: true, writable: true,
+        value: function(){ return realNow(); }
+      });
+    } else {
+      // Trả về NaN -> so sánh > timeLimit luôn false
+      Object.defineProperty(Date.prototype, 'valueOf', {
+        configurable: true, writable: true,
+        value: function(){ return NaN; }
+      });
+      Object.defineProperty(Date.prototype, 'getTime', {
+        configurable: true, writable: true,
+        value: function(){ return NaN; }
+      });
+    }
+
+    // Nhiều anti-debug dùng performance.now()
+    if (window.performance && typeof performance.now === 'function') {
+      const realPerfNow = performance.now.bind(performance);
+      if (NEUTRAL_MODE === 'zero') {
+        // cố định delta ~ 0
+        let last = realPerfNow();
+        performance.now = function(){ return last; };
+      } else {
+        performance.now = function(){ return NaN; };
+      }
+    }
+  })();
+
+  // --- 3) Chặn setInterval có 'debugger' hoặc mẫu time-check
+  (function patchTimers(){
+    const _setInterval = window.setInterval;
+    const _setTimeout  = window.setTimeout;
+
+    function guard(fn, label){
+      try {
+        const s = String(fn);
+        if (s.includes('debugger') || (s.includes('startTime') && s.includes('new Date()'))) {
+          console.log(`[Bypass] Blocked ${label} anti-debugger`);
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
+    window.setInterval = function(fn, delay, ...args){
+      if (typeof fn === 'function' && guard(fn, 'setInterval')) return -1;
+      return _setInterval(fn, delay, ...args);
+    };
+    window.setTimeout = function(fn, delay, ...args){
+      if (typeof fn === 'function' && guard(fn, 'setTimeout')) return -1;
+      return _setTimeout(fn, delay, ...args);
+    };
+  })();
+
+  // --- 4) Một số script gài getter phá console qua Error.message
+  (function patchDefineProperties(){
+    const _defineProperties = Object.defineProperties;
+    Object.defineProperties = function(obj, props){
+      try {
+        if (obj instanceof Error && props?.message?.get) {
+          // loại bỏ getter độc hại
+          delete props.message;
+          console.log('[Bypass] Stripped malicious Error.message getter');
+        }
+      } catch {}
+      return _defineProperties.call(Object, obj, props);
+    };
+  })();
+
+  console.log('✅ Anti-debugger neutralized: startTime effectively undefined via Date arithmetic patch.');
+})();
